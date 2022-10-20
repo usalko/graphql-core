@@ -106,10 +106,11 @@ def value_from_ast(
         type_ = cast(GraphQLInputObjectType, type_)
         coerced_obj: Dict[str, Any] = {}
         fields = type_.fields
-        field_nodes = {field.name.value: field for field in value_node.fields}
-        for field_name, field in fields.items():
-            field_node = field_nodes.get(field_name)
-            if not field_node or is_missing_variable(field_node.value, variables):
+        # Presented fields (save input order)
+        for field_node in value_node.fields:
+            field_name = field_node.name.value
+            field = fields.get(field_node.name.value)
+            if is_missing_variable(field_node.value, variables):
                 if field.default_value is not Undefined:
                     # Use out name as name if it exists (extension of GraphQL.js).
                     coerced_obj[field.out_name or field_name] = field.default_value
@@ -120,6 +121,13 @@ def value_from_ast(
             if field_value is Undefined:
                 return Undefined
             coerced_obj[field.out_name or field_name] = field_value
+        # Not presented with default value
+        for field_name, field in filter(lambda x: not((x[1].out_name or x[0]) in coerced_obj), fields.items()):
+            if field.default_value is not Undefined:
+                # Use out name as name if it exists (extension of GraphQL.js).
+                coerced_obj[field.out_name or field_name] = field.default_value
+            elif is_non_null_type(field.type):  # pragma: no cover else
+                return Undefined
 
         return type_.out_type(coerced_obj)
 
