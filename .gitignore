@@ -25,3 +25,7 @@ __pycache__/
 *.egg-info
 *.log
 *.py[cod]
+
+# Venv artifacts
+.pip
+.env
