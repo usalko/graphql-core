@@ -1,3 +1,4 @@
+import asyncio
 import re
 from typing import Any, Awaitable, cast
 
@@ -146,7 +147,6 @@ def describe_execute_handles_non_nullable_types():
             )
 
     def describe_nulls_a_returned_object_that_contains_a_non_null_field():
-
         query = """
             {
               syncNest {
@@ -482,6 +482,7 @@ def describe_execute_handles_non_nullable_types():
         @mark.asyncio
         async def returns_null():
             result = await execute_sync_and_async(query, NullingData())
+            await asyncio.sleep(0)  # strangely needed to get coverage on Python 3.11
             assert result == (
                 None,
                 [
@@ -497,6 +498,7 @@ def describe_execute_handles_non_nullable_types():
         @mark.asyncio
         async def throws():
             result = await execute_sync_and_async(query, ThrowingData())
+            await asyncio.sleep(0)  # strangely needed to get coverage on Python 3.11
             assert result == (
                 None,
                 [
@@ -509,7 +511,6 @@ def describe_execute_handles_non_nullable_types():
             )
 
     def describe_handles_non_null_argument():
-
         # noinspection PyPep8Naming
         schema_with_non_null_arg = GraphQLSchema(
             GraphQLObjectType(

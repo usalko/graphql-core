@@ -1,6 +1,6 @@
 from pytest import mark
 
-from graphql.execution import ExecutionContext, MapAsyncIterator, execute, subscribe
+from graphql.execution import ExecutionContext, MapAsyncIterable, execute, subscribe
 from graphql.language import parse
 from graphql.type import GraphQLField, GraphQLObjectType, GraphQLSchema, GraphQLString
 
@@ -67,13 +67,13 @@ def describe_customize_subscription():
             async def custom_foo():
                 yield {"foo": "FooValue"}
 
-        subscription = await subscribe(
+        subscription = subscribe(
             schema,
             document=parse("subscription { foo }"),
             root_value=Root(),
             subscribe_field_resolver=lambda root, _info: root.custom_foo(),
         )
-        assert isinstance(subscription, MapAsyncIterator)
+        assert isinstance(subscription, MapAsyncIterable)
 
         assert await anext(subscription) == (
             {"foo": "FooValue"},
@@ -111,12 +111,12 @@ def describe_customize_subscription():
         )
 
         document = parse("subscription { foo }")
-        subscription = await subscribe(
+        subscription = subscribe(
             schema,
             document,
             context_value={},
             execution_context_class=TestExecutionContext,
         )
-        assert isinstance(subscription, MapAsyncIterator)
+        assert isinstance(subscription, MapAsyncIterable)
 
         assert await anext(subscription) == ({"foo": "bar"}, None)

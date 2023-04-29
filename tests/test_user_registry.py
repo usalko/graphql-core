@@ -29,7 +29,7 @@ from graphql import (
     parse,
     subscribe,
 )
-from graphql.execution.map_async_iterator import MapAsyncIterator
+from graphql.execution.map_async_iterable import MapAsyncIterable
 from graphql.pyutils import SimplePubSub, SimplePubSubIterator
 
 
@@ -410,10 +410,10 @@ def describe_subscription():
             """
 
         variables = {"userId": "0"}
-        subscription_one = await subscribe(
+        subscription_one = subscribe(
             schema, parse(query), context_value=context, variable_values=variables
         )
-        assert isinstance(subscription_one, MapAsyncIterator)
+        assert isinstance(subscription_one, MapAsyncIterable)
 
         query = """
             subscription {
@@ -424,8 +424,8 @@ def describe_subscription():
             }
             """
 
-        subscription_all = await subscribe(schema, parse(query), context_value=context)
-        assert isinstance(subscription_all, MapAsyncIterator)
+        subscription_all = subscribe(schema, parse(query), context_value=context)
+        assert isinstance(subscription_all, MapAsyncIterable)
 
         received_one = []
         received_all = []
@@ -504,8 +504,7 @@ def describe_subscription():
                     break
 
         tasks = [
-            create_task(task()) if create_task else task()
-            for task in (mutate_users, receive_one, receive_all)
+            create_task(task()) for task in (mutate_users, receive_one, receive_all)
         ]
         done, pending = await wait(tasks, timeout=1)
         assert not pending

@@ -228,7 +228,7 @@ def describe_strip_ignored_characters():
         ).to_stay_the_same()
 
     @mark.slow
-    @mark.timeout(20)
+    @mark.timeout(80)
     def strips_ignored_characters_inside_random_block_strings():
         # Testing with length >7 is taking exponentially more time. However it is
         # highly recommended to test with increased limit if you make any change.

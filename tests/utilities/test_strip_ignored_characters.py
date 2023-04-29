@@ -73,6 +73,21 @@ def describe_strip_ignored_characters():
             '"""Type description""" type Foo{"""Field description""" bar:String}'
         )
 
+    def strips_ignored_characters_from_source():
+        source = Source(
+            dedent(
+                """
+            {
+              foo {
+                bar
+              }
+            }
+            """
+            )
+        )
+
+        assert strip_ignored_characters(source) == "{foo{bar}}"
+
     def report_document_with_invalid_token():
         with raises(GraphQLSyntaxError) as exc_info:
             strip_ignored_characters('{ foo(arg: "\n"')
@@ -198,8 +213,16 @@ def describe_strip_ignored_characters():
         stripped_query = strip_ignored_characters(kitchen_sink_query)
         assert strip_ignored_characters(stripped_query) == stripped_query
 
-        query_ast = parse(kitchen_sink_query, no_location=True)
-        stripped_ast = parse(stripped_query, no_location=True)
+        query_ast = parse(
+            kitchen_sink_query,
+            no_location=True,
+            experimental_client_controlled_nullability=True,
+        )
+        stripped_ast = parse(
+            stripped_query,
+            no_location=True,
+            experimental_client_controlled_nullability=True,
+        )
         assert stripped_ast == query_ast
 
     # noinspection PyShadowingNames

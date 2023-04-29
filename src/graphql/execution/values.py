@@ -1,4 +1,4 @@
-from typing import Any, Callable, Collection, Dict, List, Optional, Union, cast
+from typing import Any, Callable, Collection, Dict, List, Optional, Union
 
 from ..error import GraphQLError
 from ..language import (
@@ -21,7 +21,6 @@ from ..pyutils import Undefined, inspect, print_path_list
 from ..type import (
     GraphQLDirective,
     GraphQLField,
-    GraphQLInputType,
     GraphQLSchema,
     is_input_type,
     is_non_null_type,
@@ -31,10 +30,16 @@ from ..utilities.type_from_ast import type_from_ast
 from ..utilities.value_from_ast import value_from_ast
 
 
+try:
+    from typing import TypeAlias
+except ImportError:  # Python < 3.10
+    from typing_extensions import TypeAlias
+
+
 __all__ = ["get_argument_values", "get_directive_values", "get_variable_values"]
 
 
-CoercedVariableValues = Union[List[GraphQLError], Dict[str, Any]]
+CoercedVariableValues: TypeAlias = Union[List[GraphQLError], Dict[str, Any]]
 
 
 def get_variable_values(
@@ -92,7 +97,6 @@ def coerce_variable_values(
             )
             continue
 
-        var_type = cast(GraphQLInputType, var_type)
         if var_name not in inputs:
             if var_def_node.default_value:
                 coerced_values[var_name] = value_from_ast(
@@ -211,7 +215,7 @@ def get_argument_values(
     return coerced_values
 
 
-NodeWithDirective = Union[
+NodeWithDirective: TypeAlias = Union[
     EnumValueDefinitionNode,
     ExecutableDefinitionNode,
     FieldDefinitionNode,
