@@ -7,8 +7,7 @@ operations on a simulated user registry database backend.
 from asyncio import create_task, sleep, wait
 from collections import defaultdict
 from enum import Enum
-from inspect import isawaitable
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, AsyncIterable, Dict, List, NamedTuple, Optional
 
 from pytest import fixture, mark
 
@@ -29,8 +28,7 @@ from graphql import (
     parse,
     subscribe,
 )
-from graphql.execution.map_async_iterable import MapAsyncIterable
-from graphql.pyutils import SimplePubSub, SimplePubSubIterator
+from graphql.pyutils import SimplePubSub, SimplePubSubIterator, is_awaitable
 
 
 class User(NamedTuple):
@@ -158,7 +156,7 @@ async def subscribe_user(_root, info, id=None):
     """Subscribe to mutations of a specific user object or all user objects"""
     async_iterator = info.context["registry"].event_iterator(id)
     async for event in async_iterator:
-        yield await event if isawaitable(event) else event  # pragma: no cover exit
+        yield await event if is_awaitable(event) else event  # pragma: no cover exit
 
 
 # noinspection PyShadowingBuiltins,PyUnusedLocal
@@ -413,7 +411,7 @@ def describe_subscription():
         subscription_one = subscribe(
             schema, parse(query), context_value=context, variable_values=variables
         )
-        assert isinstance(subscription_one, MapAsyncIterable)
+        assert isinstance(subscription_one, AsyncIterable)
 
         query = """
             subscription {
@@ -425,13 +423,13 @@ def describe_subscription():
             """
 
         subscription_all = subscribe(schema, parse(query), context_value=context)
-        assert isinstance(subscription_all, MapAsyncIterable)
+        assert isinstance(subscription_all, AsyncIterable)
 
         received_one = []
         received_all = []
 
         async def mutate_users():
-            await sleep(0)  # make sure subscribers are running
+            await sleep(2 / 512)  # make sure subscribers are running
             await graphql(
                 schema,
                 """

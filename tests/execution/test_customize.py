@@ -1,6 +1,8 @@
+from inspect import isasyncgen
+
 from pytest import mark
 
-from graphql.execution import ExecutionContext, MapAsyncIterable, execute, subscribe
+from graphql.execution import ExecutionContext, execute, subscribe
 from graphql.language import parse
 from graphql.type import GraphQLField, GraphQLObjectType, GraphQLSchema, GraphQLString
 
@@ -42,8 +44,12 @@ def describe_customize_execution():
         )
 
         class TestExecutionContext(ExecutionContext):
-            def execute_field(self, parent_type, source, field_nodes, path):
-                result = super().execute_field(parent_type, source, field_nodes, path)
+            def execute_field(
+                self, parent_type, source, field_nodes, path, async_payload_record=None
+            ):
+                result = super().execute_field(
+                    parent_type, source, field_nodes, path, async_payload_record
+                )
                 return result * 2  # type: ignore
 
         assert execute(schema, query, execution_context_class=TestExecutionContext) == (
@@ -73,7 +79,7 @@ def describe_customize_subscription():
             root_value=Root(),
             subscribe_field_resolver=lambda root, _info: root.custom_foo(),
         )
-        assert isinstance(subscription, MapAsyncIterable)
+        assert isasyncgen(subscription)
 
         assert await anext(subscription) == (
             {"foo": "FooValue"},
@@ -117,6 +123,6 @@ def describe_customize_subscription():
             context_value={},
             execution_context_class=TestExecutionContext,
         )
-        assert isinstance(subscription, MapAsyncIterable)
+        assert isasyncgen(subscription)
 
         assert await anext(subscription) == ({"foo": "bar"}, None)

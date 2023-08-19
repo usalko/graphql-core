@@ -1,13 +1,7 @@
-import platform
-import sys
-from asyncio import CancelledError, Event, ensure_future, sleep
-
 from pytest import mark, raises
 
-from graphql.execution import MapAsyncIterable
+from graphql.execution import map_async_iterable
 
-
-is_pypy = platform.python_implementation() == "PyPy"
 
 try:  # pragma: no cover
     anext
@@ -18,6 +12,16 @@ except NameError:  # pragma: no cover (Python < 3.10)
         return await iterator.__anext__()
 
 
+async def double(x: int) -> int:
+    """Test callback that doubles the input value."""
+    return x + x
+
+
+async def throw(_x: int) -> int:
+    """Test callback that raises a RuntimeError."""
+    raise RuntimeError("Ouch")
+
+
 def describe_map_async_iterable():
     @mark.asyncio
     async def maps_over_async_generator():
@@ -26,7 +30,7 @@ def describe_map_async_iterable():
             yield 2
             yield 3
 
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
+        doubles = map_async_iterable(source(), double)
 
         assert await anext(doubles) == 2
         assert await anext(doubles) == 4
@@ -48,7 +52,7 @@ def describe_map_async_iterable():
                 except IndexError:
                     raise StopAsyncIteration
 
-        doubles = MapAsyncIterable(Iterable(), lambda x: x + x)
+        doubles = map_async_iterable(Iterable(), double)
 
         values = [value async for value in doubles]
 
@@ -62,23 +66,7 @@ def describe_map_async_iterable():
             yield 2
             yield 3
 
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
-
-        values = [value async for value in doubles]
-
-        assert values == [2, 4, 6]
-
-    @mark.asyncio
-    async def maps_over_async_values_with_async_function():
-        async def source():
-            yield 1
-            yield 2
-            yield 3
-
-        async def double(x):
-            return x + x
-
-        doubles = MapAsyncIterable(source(), double)
+        doubles = map_async_iterable(source(), double)
 
         values = [value async for value in doubles]
 
@@ -91,7 +79,7 @@ def describe_map_async_iterable():
             yield 2
             yield 3  # pragma: no cover
 
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
+        doubles = map_async_iterable(source(), double)
 
         assert await anext(doubles) == 2
         assert await anext(doubles) == 4
@@ -119,7 +107,7 @@ def describe_map_async_iterable():
                 except IndexError:  # pragma: no cover
                     raise StopAsyncIteration
 
-        doubles = MapAsyncIterable(Iterable(), lambda x: x + x)
+        doubles = map_async_iterable(Iterable(), double)
 
         assert await anext(doubles) == 2
         assert await anext(doubles) == 4
@@ -132,30 +120,6 @@ def describe_map_async_iterable():
             await anext(doubles)
         with raises(StopAsyncIteration):
             await anext(doubles)
-
-    @mark.asyncio
-    async def passes_through_early_return_from_async_values():
-        async def source():
-            try:
-                yield 1
-                yield 2
-                yield 3  # pragma: no cover
-            finally:
-                yield "Done"
-                yield "Last"
-
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
-
-        assert await anext(doubles) == 2
-        assert await anext(doubles) == 4
-
-        # Early return
-        await doubles.aclose()
-
-        # Subsequent next calls may yield from finally block
-        assert await anext(doubles) == "LastLast"
-        with raises(GeneratorExit):
-            assert await anext(doubles)
 
     @mark.asyncio
     async def allows_throwing_errors_through_async_iterable():
@@ -171,7 +135,7 @@ def describe_map_async_iterable():
                 except IndexError:  # pragma: no cover
                     raise StopAsyncIteration
 
-        doubles = MapAsyncIterable(Iterable(), lambda x: x + x)
+        doubles = map_async_iterable(Iterable(), double)
 
         assert await anext(doubles) == 2
         assert await anext(doubles) == 4
@@ -197,9 +161,9 @@ def describe_map_async_iterable():
             async def __anext__(self):
                 return 1
 
-        one = MapAsyncIterable(Iterable(), lambda x: x)
+        one = map_async_iterable(Iterable(), double)
 
-        assert await anext(one) == 1
+        assert await anext(one) == 2
 
         # Throw error with value passed separately
         try:
@@ -223,9 +187,9 @@ def describe_map_async_iterable():
             async def __anext__(self):
                 return 1
 
-        one = MapAsyncIterable(Iterable(), lambda x: x)
+        one = map_async_iterable(Iterable(), double)
 
-        assert await anext(one) == 1
+        assert await anext(one) == 2
 
         # Throw error with traceback passed separately
         try:
@@ -241,37 +205,14 @@ def describe_map_async_iterable():
             await anext(one)
 
     @mark.asyncio
-    async def passes_through_caught_errors_through_async_generators():
+    async def does_not_map_over_thrown_errors():
         async def source():
-            try:
-                yield 1
-                yield 2
-                yield 3  # pragma: no cover
-            except Exception as e:
-                yield e
-
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
-
-        assert await anext(doubles) == 2
-        assert await anext(doubles) == 4
-
-        # Throw error
-        await doubles.athrow(RuntimeError("ouch"))
-
-        with raises(StopAsyncIteration):
-            await anext(doubles)
-        with raises(StopAsyncIteration):
-            await anext(doubles)
-
-    @mark.asyncio
-    async def does_not_normally_map_over_thrown_errors():
-        async def source():
-            yield "Hello"
+            yield 1
             raise RuntimeError("Goodbye")
 
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
+        doubles = map_async_iterable(source(), double)
 
-        assert await anext(doubles) == "HelloHello"
+        assert await anext(doubles) == 2
 
         with raises(RuntimeError) as exc_info:
             await anext(doubles)
@@ -279,13 +220,13 @@ def describe_map_async_iterable():
         assert str(exc_info.value) == "Goodbye"
 
     @mark.asyncio
-    async def does_not_normally_map_over_externally_thrown_errors():
+    async def does_not_map_over_externally_thrown_errors():
         async def source():
-            yield "Hello"
+            yield 1
 
-        doubles = MapAsyncIterable(source(), lambda x: x + x)
+        doubles = map_async_iterable(source(), double)
 
-        assert await anext(doubles) == "HelloHello"
+        assert await anext(doubles) == 2
 
         with raises(RuntimeError) as exc_info:
             await doubles.athrow(RuntimeError("Goodbye"))
@@ -293,208 +234,97 @@ def describe_map_async_iterable():
         assert str(exc_info.value) == "Goodbye"
 
     @mark.asyncio
-    async def can_use_simple_iterable_instead_of_generator():
-        async def source():
-            yield 1
-            yield 2
-            yield 3
-
-        class Source:
-            def __init__(self):
-                self.counter = 0
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                self.counter += 1
-                if self.counter > 3:
-                    raise StopAsyncIteration
-                return self.counter
-
-        def double(x):
-            return x + x
-
-        for iterable in source, Source:
-            doubles = MapAsyncIterable(iterable(), double)
-
-            await doubles.aclose()
-
-            with raises(StopAsyncIteration):
-                await anext(doubles)
-
-            doubles = MapAsyncIterable(iterable(), double)
-
-            assert await anext(doubles) == 2
-            assert await anext(doubles) == 4
-            assert await anext(doubles) == 6
-
-            with raises(StopAsyncIteration):
-                await anext(doubles)
-
-            doubles = MapAsyncIterable(iterable(), double)
-
-            assert await anext(doubles) == 2
-            assert await anext(doubles) == 4
-
-            # Throw error
-            with raises(RuntimeError) as exc_info:
-                await doubles.athrow(RuntimeError("ouch"))
-
-            assert str(exc_info.value) == "ouch"
-
-            with raises(StopAsyncIteration):
-                await anext(doubles)
-            with raises(StopAsyncIteration):
-                await anext(doubles)
-
-            # no more exceptions should be thrown
-            if is_pypy:
-                # need to investigate why this is needed with PyPy
-                await doubles.aclose()  # pragma: no cover
-            await doubles.athrow(RuntimeError("no more ouch"))
-
-            with raises(StopAsyncIteration):
-                await anext(doubles)
-
-            await doubles.aclose()
-
-            doubles = MapAsyncIterable(iterable(), double)
-
-            assert await anext(doubles) == 2
-            assert await anext(doubles) == 4
-
-            try:
-                raise ValueError("bad")
-            except ValueError:
-                tb = sys.exc_info()[2]
-
-            # Throw error
-            with raises(ValueError):
-                await doubles.athrow(ValueError, None, tb)
-
-        await sleep(0)
-
-    @mark.asyncio
-    async def stops_async_iteration_on_close():
-        async def source():
-            yield 1
-            await Event().wait()  # Block forever
-            yield 2  # pragma: no cover
-            yield 3  # pragma: no cover
-
-        singles = source()
-        doubles = MapAsyncIterable(singles, lambda x: x * 2)
-
-        result = await anext(doubles)
-        assert result == 2
-
-        # Make sure it is blocked
-        doubles_future = ensure_future(anext(doubles))
-        await sleep(0.05)
-        assert not doubles_future.done()
-
-        # Unblock and watch StopAsyncIteration propagate
-        await doubles.aclose()
-        await sleep(0.05)
-        assert doubles_future.done()
-        assert isinstance(doubles_future.exception(), StopAsyncIteration)
-
-        with raises(StopAsyncIteration):
-            await anext(singles)
-
-    @mark.asyncio
-    async def can_unset_closed_state_of_async_iterable():
-        items = [1, 2, 3]
-
+    async def iterable_is_closed_when_mapped_iterable_is_closed():
         class Iterable:
             def __init__(self):
-                self.is_closed = False
+                self.closed = False
 
             def __aiter__(self):
                 return self
 
             async def __anext__(self):
-                if self.is_closed:
-                    raise StopAsyncIteration
-                try:
-                    return items.pop(0)
-                except IndexError:
-                    raise StopAsyncIteration
+                return 1
 
             async def aclose(self):
-                self.is_closed = True
+                self.closed = True
 
         iterable = Iterable()
-        doubles = MapAsyncIterable(iterable, lambda x: x + x)
-
+        doubles = map_async_iterable(iterable, double)
         assert await anext(doubles) == 2
-        assert await anext(doubles) == 4
-        assert not iterable.is_closed
+        assert not iterable.closed
         await doubles.aclose()
-        assert iterable.is_closed
-        with raises(StopAsyncIteration):
-            await anext(iterable)
+        assert iterable.closed
         with raises(StopAsyncIteration):
             await anext(doubles)
-        assert doubles.is_closed
-
-        iterable.is_closed = False
-        doubles.is_closed = False
-        assert not doubles.is_closed
-
-        assert await anext(doubles) == 6
-        assert not doubles.is_closed
-        assert not iterable.is_closed
-        with raises(StopAsyncIteration):
-            await anext(iterable)
-        with raises(StopAsyncIteration):
-            await anext(doubles)
-        assert not doubles.is_closed
-        assert not iterable.is_closed
 
     @mark.asyncio
-    async def can_cancel_async_iterable_while_waiting():
+    async def iterable_is_closed_on_callback_error():
         class Iterable:
             def __init__(self):
-                self.is_closed = False
-                self.value = 1
+                self.closed = False
 
             def __aiter__(self):
                 return self
 
             async def __anext__(self):
-                try:
-                    await sleep(0.5)
-                    return self.value  # pragma: no cover
-                except CancelledError:
-                    self.value = -1
-                    raise
+                return 1
 
             async def aclose(self):
-                self.is_closed = True
+                self.closed = True
 
         iterable = Iterable()
-        doubles = MapAsyncIterable(iterable, lambda x: x + x)  # pragma: no cover exit
-        cancelled = False
+        doubles = map_async_iterable(iterable, throw)
+        with raises(RuntimeError, match="Ouch"):
+            await anext(doubles)
+        assert iterable.closed
+        with raises(StopAsyncIteration):
+            await anext(doubles)
 
-        async def iterator_task():
-            nonlocal cancelled
+    @mark.asyncio
+    async def iterable_exits_on_callback_error():
+        exited = False
+
+        async def iterable():
+            nonlocal exited
             try:
-                async for _ in doubles:
-                    assert False  # pragma: no cover
-            except CancelledError:
-                cancelled = True
+                while True:
+                    yield 1
+            except GeneratorExit:
+                exited = True
 
-        task = ensure_future(iterator_task())
-        await sleep(0.05)
-        assert not cancelled
-        assert not doubles.is_closed
-        assert iterable.value == 1
-        assert not iterable.is_closed
-        task.cancel()
-        await sleep(0.05)
-        assert cancelled
-        assert iterable.value == -1
-        assert doubles.is_closed
-        assert iterable.is_closed
+        doubles = map_async_iterable(iterable(), throw)
+        with raises(RuntimeError, match="Ouch"):
+            await anext(doubles)
+        assert exited
+        with raises(StopAsyncIteration):
+            await anext(doubles)
+
+    @mark.asyncio
+    async def mapped_iterable_is_closed_when_iterable_cannot_be_closed():
+        class Iterable:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                return 1
+
+        doubles = map_async_iterable(Iterable(), double)
+        assert await anext(doubles) == 2
+        await doubles.aclose()
+        with raises(StopAsyncIteration):
+            await anext(doubles)
+
+    @mark.asyncio
+    async def ignores_that_iterable_cannot_be_closed_on_callback_error():
+        class Iterable:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                return 1
+
+        doubles = map_async_iterable(Iterable(), throw)
+        with raises(RuntimeError, match="Ouch"):
+            await anext(doubles)
+        with raises(StopAsyncIteration):
+            await anext(doubles)

@@ -42,8 +42,13 @@ def describe_assert_equal_awaitables_or_values():
         async def test_value():
             return {"test": "test"}
 
+        value1 = await test_value()
+        value2 = test_value()
+
         with raises(
             AssertionError,
             match=r"Received an invalid mixture of promises and values\.",
         ):
-            await assert_equal_awaitables_or_values(await test_value(), test_value())
+            await assert_equal_awaitables_or_values(value1, value2)
+
+        assert await value2 == value1
